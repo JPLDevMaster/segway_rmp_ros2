@@ -23,9 +23,9 @@ def generate_launch_description():
                 {'angular_pos_accel_limit': 45.0},
                 {'angular_neg_accel_limit': 45.0},
                 {'max_linear_vel': 0.75},
-                {'max_angular_vel': 0.6}, # 0.5
+                {'max_angular_vel': 0.5}, # 0.5
                 {'linear_odom_scale': 1.6},
-                {'angular_odom_scale': 1.6},
+                {'angular_odom_scale': 1.8}, #1.6
                 # {'reset_odometry': True},
                 # {'odometry_reset_duration': 1.0}
             ],

@@ -18,7 +18,7 @@
 using namespace std::chrono_literals;  // For defining time durations in seconds/milliseconds easily
 
 // update rate of handle status callback
-constexpr std::chrono::milliseconds updateInterval(30); // 100 seems to be solving trajectory problem
+constexpr std::chrono::milliseconds updateInterval(50); // 50 and 100 seems to be solving trajectory problem
 
 class SegwayRMPNode;
 
@@ -335,7 +335,7 @@ public:
         
         this->odom_msg.twist.twist.linear.x = vel_x;
         this->odom_msg.twist.twist.linear.y = vel_y;
-        this->odom_msg.twist.twist.angular.z = yaw_rate;
+        this->odom_msg.twist.twist.angular.z = yaw_rate*100;
         // this->odom_msg.twist.twist.angular.w = this->odometry_w;
 
         this->odom_pub->publish(this->odom_msg);
@@ -708,8 +708,13 @@ void handleStatusWrapper(segwayrmp::SegwayStatus::Ptr ss) {
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);  // Initialize the ROS2 system
+
+    // Create a shared pointer for the node
     auto segway_node = std::make_shared<SegwayRMPNode>();
-    segway_node->run();
+
+    // Call the run() method (sping is within run)
+    segway_node->run();  // Assuming run() is a public method of SegwayRMPNode
+
     rclcpp::shutdown();  // Shutdown the ROS2 system
     return 0; 
 }
