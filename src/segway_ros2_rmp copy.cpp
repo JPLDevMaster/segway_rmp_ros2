@@ -352,12 +352,15 @@ public:
     /**
     * The handler for messages received on the 'cmd_vel' topic.
     */
-    void cmd_velCallback(const geometry_msgs::msg::Twist::ConstPtr& msg) {
+    void cmd_velCallback(const geometry_msgs::msg::TwistStamped::SharedPtr msg) {
         if (!this->connected)
             return;
-      
+    
         std::lock_guard<std::mutex> lock(this->m_mutex);
-        double x = msg->linear.x, z = msg->angular.z;
+
+        // Access the velocity data through the 'twist' field.
+        double x = msg->twist.linear.x;
+        double z = msg->twist.angular.z;
 
         if (this->invert_x) {
             x *= -1;
@@ -366,14 +369,14 @@ public:
             z *= -1;
         }
 
-        // Check for maximum linear velocity
+        // Check for maximum linear velocity.
         if (this->max_linear_vel != 0.0) {
             if (std::abs(x) > this->max_linear_vel) {
                 x = (x > 0) ? this->max_linear_vel : -this->max_linear_vel;
             }
         }
 
-        // Check for maximum angular velocity
+        // Check for maximum angular velocity.
         if (this->max_angular_vel != 0.0) {
             if (std::abs(z) > this->max_angular_vel) {
                 z = (z > 0) ? this->max_angular_vel : -this->max_angular_vel;
@@ -381,9 +384,9 @@ public:
         }
 
         this->target_linear_vel = x;
-        this->target_angular_vel = z * radians_to_degrees;  // Convert to degrees
+        this->target_angular_vel = z * radians_to_degrees;  // Convert to degrees.
 
-        // Create or reset the motor timeout timer
+        // Create or reset the motor timeout timer.
         if (this->motor_timeout_timer != nullptr) {
             this->motor_timeout_timer->reset();
         } else {
@@ -398,7 +401,7 @@ private:
     // Functions
     void setupROSComms() {
         // Subscribe to command velocities
-        this->cmd_vel_subscriber = this->create_subscription<geometry_msgs::msg::Twist>(
+        this->cmd_vel_subscriber = this->create_subscription<geometry_msgs::msg::TwistStamped>(
             "cmd_vel",
             10,
             std::bind(&SegwayRMPNode::cmd_velCallback, this, std::placeholders::_1)
@@ -621,7 +624,7 @@ private:
 
     rclcpp::TimerBase::SharedPtr keep_alive_timer;  // Timer for keep-alive functionality
 
-    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_subscriber;  // Subscriber for cmd_vel
+    rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_subscriber;  // Subscriber for cmd_vel
     rclcpp::Publisher<segway_rmp_ros2::msg::SegwayStatusStamped>::SharedPtr segway_status_pub;  // Publisher for Segway status
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub;  // Publisher for odometry
     // Nikunj
