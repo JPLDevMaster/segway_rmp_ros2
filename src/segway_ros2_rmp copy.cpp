@@ -4,6 +4,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include <tf2_ros/transform_broadcaster.h>
+#include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include "nav_msgs/msg/odometry.hpp"
 #include "segway_rmp_ros2/msg/segway_status_stamped.hpp"

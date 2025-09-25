@@ -43,10 +43,16 @@ target_include_directories(segway_rmp_node_ros2 PUBLIC
   ${CMAKE_INSTALL_PREFIX}/libsegwayrmp/include  # Add this line to include the install directory
 )
 
+# Ensure that message dependencies are properly exported
+rosidl_get_typesupport_target(typesupport_target
+  ${PROJECT_NAME} "rosidl_typesupport_cpp"
+)
+
 # Link libraries
 target_link_libraries(segway_rmp_node_ros2
   ${Boost_LIBRARIES}
   ${libsegwayrmp_INCLUDE_DIRS}
+  ${typesupport_target}
 )
 
 ament_target_dependencies(segway_rmp_node_ros2
@@ -59,10 +65,6 @@ ament_target_dependencies(segway_rmp_node_ros2
   tf2_geometry_msgs
   libsegwayrmp  # Add segwayrmp to ament_target_dependencies
 )
-
-# Ensure that message dependencies are properly exported
-rosidl_target_interfaces(segway_rmp_node_ros2
-  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # Install targets
 install(TARGETS
