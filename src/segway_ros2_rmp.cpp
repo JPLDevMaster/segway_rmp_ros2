@@ -274,7 +274,7 @@ public:
         float yaw_displacement = 
             (ss.integrated_turn_position - this->initial_integrated_turn_position) * 
             degrees_to_radians * this->angular_odom_scale;
-        float yaw_rate = ss.yaw_rate * degrees_to_radians;
+        float yaw_rate = ss.yaw_rate * degrees_to_radianCos;
         // std::cout << "--> " << ss.yaw_rate << std::endl;
         // Test yaw angles values
         // std::cout << ss.yaw_rate << std::endl;
@@ -283,26 +283,23 @@ public:
         float vel_y = 0.0;
 
         if (!this->first_odometry) {
-            float delta_forward_displacement = 
-                forward_displacement - this->last_forward_displacement;
+            float delta_forward_displacement = forward_displacement - this->last_forward_displacement;
             double delta_time = (current_time - this->last_time).seconds();
 
-            // Nikunj
-            if (delta_time <= 0.0) {
-                return;
+            if (delta_time > 0.0) {
+                // The robot's linear velocity (in its own frame) is simply the
+                // rate of change of its forward displacement. This will be correctly
+                // signed (negative when moving backward).
+                vel_x = delta_forward_displacement / delta_time;
+                vel_y = 0.0; // A differential drive robot has no sideways velocity.
+
+                // The POSE calculation remains the same, as it IS in the odom frame.
+                this->odometry_w = yaw_displacement;
+                float delta_odometry_x = delta_forward_displacement * std::cos(this->odometry_w);
+                this->odometry_x += delta_odometry_x;
+                float delta_odometry_y = delta_forward_displacement * std::sin(this->odometry_w);
+                this->odometry_y += delta_odometry_y;
             }
-
-            this->odometry_w = yaw_displacement;
-            float delta_odometry_x = delta_forward_displacement * std::cos(this->odometry_w);
-            vel_x = delta_odometry_x / delta_time;
-            
-            // std::cout << delta_time << std::endl;
-
-            this->odometry_x += delta_odometry_x;
-
-            float delta_odometry_y = delta_forward_displacement * std::sin(this->odometry_w);
-            vel_y = delta_odometry_y / delta_time;
-            this->odometry_y += delta_odometry_y;
         } else {
             this->first_odometry = false;
         }
