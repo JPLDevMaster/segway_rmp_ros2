@@ -274,7 +274,7 @@ public:
         float yaw_displacement = 
             (ss.integrated_turn_position - this->initial_integrated_turn_position) * 
             degrees_to_radians * this->angular_odom_scale;
-        float yaw_rate = ss.yaw_rate * degrees_to_radianCos;
+        float yaw_rate = ss.yaw_rate * degrees_to_radians;
         // std::cout << "--> " << ss.yaw_rate << std::endl;
         // Test yaw angles values
         // std::cout << ss.yaw_rate << std::endl;
@@ -288,8 +288,7 @@ public:
 
             if (delta_time > 0.0) {
                 // The robot's linear velocity (in its own frame) is simply the
-                // rate of change of its forward displacement. This will be correctly
-                // signed (negative when moving backward).
+                // rate of change of its forward displacement.
                 vel_x = delta_forward_displacement / delta_time;
                 vel_y = 0.0; // A differential drive robot has no sideways velocity.
 
