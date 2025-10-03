@@ -362,6 +362,10 @@ public:
 
         // Access the velocity data through the 'twist' field.
         double x = msg->twist.linear.x;
+
+        // Print the linear velocity to the terminal for debugging.
+        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%f, linear.y=%f, angular.z=%f", x, msg->twist.linear.y, z);
+
         double z = msg->twist.angular.z;
 
         if (this->invert_x) {
