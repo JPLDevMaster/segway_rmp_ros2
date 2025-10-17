@@ -4,7 +4,8 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include <tf2_ros/transform_broadcaster.h>
-#include "geometry_msgs/msg/twist.hpp"
+#include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include "nav_msgs/msg/odometry.hpp"
 #include "segway_rmp_ros2/msg/segway_status_stamped.hpp"
 
@@ -15,10 +16,10 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp> // For tf2::toMsg
 #include <chrono>
 
-using namespace std::chrono_literals;  // For defining time durations in seconds/milliseconds easily
+using namespace std::chrono_literals;  // For defining time durations in seconds/milliseconds easily.
 
 // update rate of handle status callback
-constexpr std::chrono::milliseconds updateInterval(50); // 50 and 100 seems to be solving trajectory problem
+constexpr std::chrono::milliseconds updateInterval(50); // 50 and 100 seems to be solving trajectory problem.
 
 class SegwayRMPNode;
 
@@ -168,12 +169,23 @@ public:
                     this->angular_vel -= this->angular_neg_accel_limit; 
             }
 
-            RCLCPP_DEBUG(this->get_logger(), "Sending move command: linear velocity = %f, angular velocity = %f", 
-            this->linear_vel, this->angular_vel);
-
             // std::cout << "linear: " << this->linear_vel << " <---> " << "Angular: " <<  this->angular_vel << std::endl;
 
             try {
+                // Store the commanded and sent velocities for logging.
+                this->sent_linear_vel = this->linear_vel;
+                this->sent_angular_vel = this->angular_vel * degrees_to_radians; // Store in rad/s for consistency.
+
+                // Log the move information.
+                if (this->log_level == "debug")
+                {
+                    RCLCPP_INFO(this->get_logger(), "Move command received: linear velocity = %f, angular velocity = %f", 
+                        this->linear_vel, this->angular_vel);
+                    RCLCPP_INFO(this->get_logger(), "Velocities sent to Segway RMP: linear velocity = %f, angular velocity = %f", 
+                        this->linear_vel, this->angular_vel);
+                }
+            
+                // Call the move function with the calculated scale.
                 this->segway_rmp->move(this->linear_vel, this->angular_vel);
             } catch (const std::exception &e) {
                 std::string e_msg(e.what());
@@ -282,26 +294,81 @@ public:
         float vel_y = 0.0;
 
         if (!this->first_odometry) {
-            float delta_forward_displacement = 
-                forward_displacement - this->last_forward_displacement;
+            float delta_forward_displacement = forward_displacement - this->last_forward_displacement;
             double delta_time = (current_time - this->last_time).seconds();
 
-            // Nikunj
-            if (delta_time <= 0.0) {
-                return;
+            if (delta_time > 0.0) {
+                // The robot's linear velocity (in its own frame) is simply the
+                // rate of change of its forward displacement.
+                vel_x = delta_forward_displacement / delta_time;
+                vel_y = 0.0; // A differential drive robot has no sideways velocity.
+
+                // The POSE calculation remains the same, as it IS in the odom frame.
+                this->odometry_w = yaw_displacement;
+                float delta_odometry_x = delta_forward_displacement * std::cos(this->odometry_w);
+                this->odometry_x += delta_odometry_x;
+                float delta_odometry_y = delta_forward_displacement * std::sin(this->odometry_w);
+                this->odometry_y += delta_odometry_y;
+
+                // Store the measured velocity for logging.
+                this->measured_linear_vel = vel_x;
+                this->measured_angular_vel = yaw_rate;
+
+                // Print velocity information for debugging.
+                double measured_vs_cmd_linear_diff = 0.0;
+        if (std::abs(this->command_linear_vel) > 1e-6) { // Avoid division by zero
+            measured_vs_cmd_linear_diff = ((this->measured_linear_vel - this->command_linear_vel) / this->command_linear_vel) * 100.0;
+        }
+
+        double sent_vs_cmd_linear_diff = 0.0;
+        if (std::abs(this->command_linear_vel) > 1e-6) {
+            sent_vs_cmd_linear_diff = ((this->sent_linear_vel - this->command_linear_vel) / this->command_linear_vel) * 100.0;
+        }
+
+        double measured_vs_cmd_angular_diff = 0.0;
+        if (std::abs(this->command_angular_vel) > 1e-6) {
+            measured_vs_cmd_angular_diff = ((this->measured_angular_vel - this->command_angular_vel) / this->command_angular_vel) * 100.0;
+        }
+        
+        double sent_vs_cmd_angular_diff = 0.0;
+        if (std::abs(this->command_angular_vel) > 1e-6) {
+            sent_vs_cmd_angular_diff = ((this->sent_angular_vel - this->command_angular_vel) / this->command_angular_vel) * 100.0;
+        }
+        
+        if (this->log_level == "debug")
+                {
+                    // Set formatting for floating point numbers
+                    std::cout << std::fixed << std::setprecision(2);
+
+                    // Print distance traveled.
+                    std::cout << "Dist: " << forward_displacement << "m -- " << std::endl;
+
+                    std::cout << "Velocities [Cmd | Sent | Measured] (% Diff from Cmd):" << std::endl;
+
+                    // Print Linear Velocity info
+                    std::cout << "-- Linear: ["
+                            << this->command_linear_vel << "|"
+                            << this->sent_linear_vel << "|"
+                            << this->measured_linear_vel << "]"
+                            // Switch to signed, 1-decimal-place formatting for percentages
+                            << " (Sent: " << std::showpos << std::setprecision(1) 
+                            << sent_vs_cmd_linear_diff << "%, Measured: "
+                            << measured_vs_cmd_linear_diff << "%) m/s" << std::endl;
+
+                    // Switch back to 2-decimal-place formatting for angular velocities
+                    std::cout << std::noshowpos << std::setprecision(2)
+                            << "-- Angular: ["
+                            << this->command_angular_vel << "|"
+                            << this->sent_angular_vel << "|"
+                            << this->measured_angular_vel << "]"
+                            // Switch to signed, 1-decimal-place formatting for percentages
+                            << " (Sent: " << std::showpos << std::setprecision(1) 
+                            << sent_vs_cmd_angular_diff << "%, Measured: "
+                            << measured_vs_cmd_angular_diff << "%) rad/s"
+                            // End the line and reset formatting
+                            << std::endl;
+                }
             }
-
-            this->odometry_w = yaw_displacement;
-            float delta_odometry_x = delta_forward_displacement * std::cos(this->odometry_w);
-            vel_x = delta_odometry_x / delta_time;
-            
-            // std::cout << delta_time << std::endl;
-
-            this->odometry_x += delta_odometry_x;
-
-            float delta_odometry_y = delta_forward_displacement * std::sin(this->odometry_w);
-            vel_y = delta_odometry_y / delta_time;
-            this->odometry_y += delta_odometry_y;
         } else {
             this->first_odometry = false;
         }
@@ -335,7 +402,7 @@ public:
         
         this->odom_msg.twist.twist.linear.x = vel_x;
         this->odom_msg.twist.twist.linear.y = vel_y;
-        this->odom_msg.twist.twist.angular.z = yaw_rate*100;
+        this->odom_msg.twist.twist.angular.z = yaw_rate;
         // this->odom_msg.twist.twist.angular.w = this->odometry_w;
 
         this->odom_pub->publish(this->odom_msg);
@@ -351,18 +418,27 @@ public:
         //RCLCPP_INFO(this->get_logger(), "Motor command timeout! Setting target linear and angular velocities to be zero.");
         this->target_linear_vel = 0.0;
         this->target_angular_vel = 0.0;
+        this->command_linear_vel = 0.0;
+        this->command_angular_vel = 0.0;
         this->motor_timeout_timer->cancel();
     }
 
     /**
     * The handler for messages received on the 'cmd_vel' topic.
     */
-    void cmd_velCallback(const geometry_msgs::msg::Twist::ConstPtr& msg) {
+    void cmd_velCallback(const geometry_msgs::msg::TwistStamped::SharedPtr msg) {
         if (!this->connected)
             return;
-      
+    
         std::lock_guard<std::mutex> lock(this->m_mutex);
-        double x = msg->linear.x, z = msg->angular.z;
+
+        // Access the velocity data through the 'twist' field.
+        double x = msg->twist.linear.x;
+
+        // Print the linear velocity to the terminal for debugging.
+        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%f", x);
+
+        double z = msg->twist.angular.z;
 
         if (this->invert_x) {
             x *= -1;
@@ -371,14 +447,14 @@ public:
             z *= -1;
         }
 
-        // Check for maximum linear velocity
+        // Check for maximum linear velocity.
         if (this->max_linear_vel != 0.0) {
             if (std::abs(x) > this->max_linear_vel) {
                 x = (x > 0) ? this->max_linear_vel : -this->max_linear_vel;
             }
         }
 
-        // Check for maximum angular velocity
+        // Check for maximum angular velocity.
         if (this->max_angular_vel != 0.0) {
             if (std::abs(z) > this->max_angular_vel) {
                 z = (z > 0) ? this->max_angular_vel : -this->max_angular_vel;
@@ -386,9 +462,13 @@ public:
         }
 
         this->target_linear_vel = x;
-        this->target_angular_vel = z * radians_to_degrees;  // Convert to degrees
+        this->target_angular_vel = z * radians_to_degrees;  // Convert to degrees.
 
-        // Create or reset the motor timeout timer
+        // Store the commanded velocities for logging.
+        this->command_linear_vel = x;
+        this->command_angular_vel = z;
+
+        // Create or reset the motor timeout timer.
         if (this->motor_timeout_timer != nullptr) {
             this->motor_timeout_timer->reset();
         } else {
@@ -403,7 +483,7 @@ private:
     // Functions
     void setupROSComms() {
         // Subscribe to command velocities
-        this->cmd_vel_subscriber = this->create_subscription<geometry_msgs::msg::Twist>(
+        this->cmd_vel_subscriber = this->create_subscription<geometry_msgs::msg::TwistStamped>(
             "cmd_vel",
             10,
             std::bind(&SegwayRMPNode::cmd_velCallback, this, std::placeholders::_1)
@@ -533,6 +613,9 @@ private:
             return 1;
         }
 
+        RCLCPP_INFO(this->get_logger(), "Interface: %s, RMP Type: %s", 
+            this->interface_type_str.c_str(), segway_rmp_type_str.c_str());
+
         // Get the linear acceleration limits in m/s^2. Zero means infinite.
         this->declare_parameter<double>("linear_pos_accel_limit", 0.0);
         this->get_parameter("linear_pos_accel_limit", this->linear_pos_accel_limit);
@@ -618,6 +701,36 @@ private:
         this->declare_parameter<double>("odometry_reset_duration", 1.0);
         this->get_parameter("odometry_reset_duration", this->odometry_reset_duration);
 
+        // Get the scale correction parameters for velocities.
+        this->declare_parameter<bool>("linear_vel_scale", true);
+        this->get_parameter("linear_vel_scale", this->linear_vel_scale);
+        this->declare_parameter<bool>("angular_vel_scale", true);
+        this->get_parameter("angular_vel_scale", this->angular_vel_scale);
+
+        // Initialize velocity trackers.
+        this->command_linear_vel = 0.0;
+        this->command_angular_vel = 0.0;
+        this->sent_linear_vel = 0.0;
+        this->sent_angular_vel = 0.0;
+        this->measured_linear_vel = 0.0;
+        this->measured_angular_vel = 0.0;
+
+        // Get the log type parameter.
+        this->declare_parameter<std::string>("log_level", "info");
+        this->get_parameter("log_level", this->log_level);
+        if (this->log_level != "info" && this->log_level != "debug" && this->log_level != "error") {
+            RCLCPP_ERROR(this->get_logger(),
+                "Invalid log type: %s, valid log types are 'info', 'debug', and 'error'.",
+                this->log_level.c_str());
+            return 1;
+        }
+
+        RCLCPP_INFO(this->get_logger(), "Odometry scales: linear = %f, angular = %f.",
+            this->linear_odom_scale, this->angular_odom_scale);
+
+        RCLCPP_INFO(this->get_logger(), "Apply velocity scales? linear = %s, angular = %s.",
+            this->linear_vel_scale ? "true" : "false", this->angular_vel_scale ? "true" : "false");
+
         return 0;
     }
 
@@ -626,7 +739,7 @@ private:
 
     rclcpp::TimerBase::SharedPtr keep_alive_timer;  // Timer for keep-alive functionality
 
-    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_subscriber;  // Subscriber for cmd_vel
+    rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_subscriber;  // Subscriber for cmd_vel
     rclcpp::Publisher<segway_rmp_ros2::msg::SegwayStatusStamped>::SharedPtr segway_status_pub;  // Publisher for Segway status
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub;  // Publisher for odometry
     // Nikunj
@@ -669,6 +782,9 @@ private:
     double linear_odom_scale;  // Linear odometry scale correction
     double angular_odom_scale;  // Angular odometry scale correction
 
+    bool linear_vel_scale;  // Linear velocity scale correction
+    bool angular_vel_scale;  // Angular velocity scale correction
+
     double max_linear_vel;  // Maximum allowed linear velocity
     double max_angular_vel;  // Maximum allowed angular velocity
 
@@ -699,6 +815,16 @@ private:
     double initial_integrated_left_wheel_position;  // Initial integrated left wheel position
     double initial_integrated_right_wheel_position;  // Initial integrated right wheel position
     double initial_integrated_turn_position;  // Initial integrated turn position
+
+    std::string log_level;  // Log message type
+
+    // Variables to track the different velocities.
+    double command_linear_vel;
+    double command_angular_vel;
+    double sent_linear_vel;
+    double sent_angular_vel;
+    double measured_linear_vel;
+    double measured_angular_vel;
 };
 
 // Callback wrapper

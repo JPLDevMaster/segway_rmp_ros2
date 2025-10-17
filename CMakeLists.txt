@@ -1,6 +1,12 @@
-cmake_minimum_required(VERSION 3.8)
+## Project Setup
+cmake_minimum_required(VERSION 3.22)
+
 project(segway_rmp_ros2)
 
+# Default to C++23.
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 23)
+endif()
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
