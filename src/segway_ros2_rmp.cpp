@@ -283,7 +283,7 @@ public:
         // std::cout << "this->linear_odom_scale -->" << this->linear_odom_scale << std::endl;
         
         float yaw_displacement = 
-            (ss.integrated_turn_position - this->initial_integrated_turn_position) * 
+            -(ss.integrated_turn_position - this->initial_integrated_turn_position) * 
             degrees_to_radians * this->angular_odom_scale;
         float yaw_rate = ss.yaw_rate * degrees_to_radians;
         // std::cout << "--> " << ss.yaw_rate << std::endl;
