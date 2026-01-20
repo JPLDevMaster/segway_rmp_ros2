@@ -441,7 +441,7 @@ public:
         double x = msg->twist.linear.x;
 
         // Print the linear velocity to the terminal for debugging.
-        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%f", x);
+        RCLCPP_DEBUG(this->get_logger(), "Received cmd_vel: linear.x=%f", x);
 
         double z = msg->twist.angular.z;
 
