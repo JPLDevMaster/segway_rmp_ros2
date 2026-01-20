@@ -292,9 +292,11 @@ public:
         
         float vel_x = 0.0;
         float vel_y = 0.0;
+        float vel_w = 0.0;
 
         if (!this->first_odometry) {
             float delta_forward_displacement = forward_displacement - this->last_forward_displacement;
+            float delta_yaw_displacement = yaw_displacement - this->last_yaw_displacement;
             double delta_time = (current_time - this->last_time).seconds();
 
             if (delta_time > 0.0) {
@@ -302,6 +304,9 @@ public:
                 // rate of change of its forward displacement.
                 vel_x = delta_forward_displacement / delta_time;
                 vel_y = 0.0; // A differential drive robot has no sideways velocity.
+
+                // Angular velocity is the rate of change of yaw displacement (encoder-based).
+                vel_w = delta_yaw_displacement / delta_time;
 
                 // The POSE calculation remains the same, as it IS in the odom frame.
                 this->odometry_w = yaw_displacement;
@@ -312,7 +317,7 @@ public:
 
                 // Store the measured velocity for logging.
                 this->measured_linear_vel = vel_x;
-                this->measured_angular_vel = yaw_rate;
+                this->measured_angular_vel = vel_w;
 
                 // Print velocity information for debugging.
                 double measured_vs_cmd_linear_diff = 0.0;
@@ -402,7 +407,7 @@ public:
         
         this->odom_msg.twist.twist.linear.x = vel_x;
         this->odom_msg.twist.twist.linear.y = vel_y;
-        this->odom_msg.twist.twist.angular.z = yaw_rate;
+        this->odom_msg.twist.twist.angular.z = vel_w;
         // this->odom_msg.twist.twist.angular.w = this->odometry_w;
 
         this->odom_pub->publish(this->odom_msg);
